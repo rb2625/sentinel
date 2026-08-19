@@ -73,7 +73,16 @@ The agent reasoning trace is visible on screen during the demo. Judges can see t
 
 ## Slide 6: Technical Architecture
 
-
+Citizen Report -> FastAPI Backend
+                       |
+              AI Agent Layer (CrewAI + Groq)
+                       |
+           +-----------+-----------+
+           |           |           |
+      CAMARA APIs   Supabase    Telegram
+      (Nokia NaC)   (Postgres)  (Alerts)
+           |
+      Dashboard (Next.js)
 
 - Backend: FastAPI (Python)
 - AI: CrewAI + Groq Llama 3.3 70B (free tier)
@@ -102,9 +111,9 @@ The agent reasoning trace is visible on screen during the demo. Judges can see t
 
 | Tier | Price | Includes |
 |------|-------|----------|
-| Free | /usr/bin/bash/month | 100 incidents, 1 city zone, dashboard |
-| Pro | 9/month | 1,000 incidents, 10 zones, Telegram alerts |
-| Enterprise | 99/month | Unlimited, custom integrations, SLA |
+| Free | $0/month | 100 incidents, 1 city zone, dashboard |
+| Pro | $49/month | 1,000 incidents, 10 zones, Telegram alerts |
+| Enterprise | $499/month | Unlimited, custom integrations, SLA |
 
 **Revenue potential:**
 - UAE: 7 emirates with municipalities and police

@@ -184,9 +184,9 @@ All components are chosen from free or freemium tiers so the full prototype can 
 
 | Tier | Price | Includes |
 |------|-------|----------|
-| Free | /usr/bin/bash/month | 100 incidents, 1 city zone, dashboard only |
-| Pro | 9/month | 1,000 incidents, 10 zones, Telegram alerts, API access |
-| Enterprise | 99/month | Unlimited incidents, unlimited zones, custom integrations, SLA |
+| Free | $0/month | 100 incidents, 1 city zone, dashboard only |
+| Pro | $49/month | 1,000 incidents, 10 zones, Telegram alerts, API access |
+| Enterprise | $499/month | Unlimited incidents, unlimited zones, custom integrations, SLA |
 
 **Revenue potential:**
 - UAE has 7 emirates, each with municipalities and police forces
