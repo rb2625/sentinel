@@ -1,14 +1,22 @@
-"""CAMARA API client using Nokia Network-as-Code SDK."""
+"""
+CAMARA API client using Nokia Network-as-Code (direct HTTP).
+
+Uses httpx directly against the Nokia API Hub because the Python SDK
+routes to incorrect endpoint paths. Wraps Device Status, Location
+Verification, and SIM Swap APIs. Includes caching and fallback.
+"""
 
 import time
 import hashlib
 import logging
 from typing import Any
 
-from network_as_code import NetworkAsCodeApi
+import httpx
 from .config import get_settings
 
 log = logging.getLogger("sentinel.camara")
+
+BASE_URL = "https://network-as-code.p-eu.apihub.nokia.io"
 
 
 class CamaraCache:
@@ -39,24 +47,36 @@ class CamaraCache:
 _cache = CamaraCache(ttl_seconds=300)
 
 
-def _get_client() -> NetworkAsCodeApi:
-    settings = get_settings()
-    return NetworkAsCodeApi(
-        api_key=settings.nokia_nac_api_key,
-        rapidapi_host="network-as-code.nokia.rapidapi.com",
-    )
-
-
 class CamaraClient:
-    """Nokia NaC CAMARA API client with caching and fallback."""
+    """Nokia NaC CAMARA API client using direct HTTP."""
+
+    SIMULATOR_PHONES = [
+        "+99999991000", "+99999991001",
+        "+99999990400", "+99999990404", "+99999990422",
+        "+99999990500", "+99999990502", "+99999990503", "+99999990504",
+    ]
 
     def __init__(self):
-        self._client: NetworkAsCodeApi | None = None
+        settings = get_settings()
+        self._headers = {
+            "x-rapidapi-key": settings.nokia_nac_api_key,
+            "x-rapidapi-host": "network-as-code.nokia.rapidapi.com",
+            "Content-Type": "application/json",
+        }
+        self._client = httpx.Client(headers=self._headers, timeout=15)
 
-    def _ensure_client(self) -> NetworkAsCodeApi:
-        if self._client is None:
-            self._client = _get_client()
-        return self._client
+    def _post(self, path: str, body: dict) -> dict:
+        """POST to a Nokia NaC endpoint. Returns JSON or error dict."""
+        url = f"{BASE_URL}/{path}"
+        try:
+            resp = self._client.post(url, json=body)
+            if resp.status_code == 200:
+                return resp.json()
+            log.warning("CAMARA %s returned %d: %s", path, resp.status_code, resp.text[:200])
+            return {"error": resp.text, "status": resp.status_code}
+        except Exception as e:
+            log.warning("CAMARA %s failed: %s", path, e)
+            return {"error": str(e)}
 
     def _resolve_phone(self, phone: str) -> str:
         if not phone.startswith("+"):
@@ -65,57 +85,7 @@ class CamaraClient:
             return "+971" + phone
         return phone
 
-    def verify_number(self, phone: str) -> dict:
-        """Verify if a phone number is real and active."""
-        phone = self._resolve_phone(phone)
-        cached = _cache.get("number", phone)
-        if cached is not None:
-            log.info("Number verification cache hit for %s", phone)
-            return cached
-        try:
-            client = self._ensure_client()
-            result = client.number_verification.verify(phone_number=phone)
-            out = {
-                "valid": True,
-                "carrier": getattr(result, "carrier", None),
-                "raw": getattr(result, "__dict__", {}),
-            }
-            _cache.set("number", phone, out)
-            return out
-        except Exception as e:
-            log.warning("Number verification failed: %s", e)
-            return {"valid": False, "carrier": None, "error": str(e)}
-
-
-    def verify_location(
-        self, phone: str, lat: float, lon: float, radius_m: int = 1000
-    ) -> dict:
-        """Verify if a device is within a geographic area."""
-        phone = self._resolve_phone(phone)
-        area_key = f"{lat},{lon},{radius_m}"
-        cached = _cache.get("location", phone, area=area_key)
-        if cached is not None:
-            log.info("Location verification cache hit for %s", phone)
-            return cached
-        try:
-            client = self._ensure_client()
-            result = client.location.verify(
-                device={"phone_number": phone},
-                area={"area_type": "CIRCLE", "area_value": f"{lat},{lon},{radius_m}"},
-            )
-            verified = getattr(result, "verification_result", False)
-            out = {
-                "verified": verified,
-                "distance_m": getattr(result, "distance", None),
-                "confidence": "high" if verified else "low",
-                "raw": getattr(result, "__dict__", {}),
-            }
-            _cache.set("location", phone, out, area=area_key)
-            return out
-        except Exception as e:
-            log.warning("Location verification failed: %s", e)
-            return {"verified": False, "distance_m": None, "confidence": "unknown", "error": str(e)}
-
+    # Device Status - Connectivity
     def check_device_status(self, phone: str) -> dict:
         """Check if a device is connected to the network."""
         phone = self._resolve_phone(phone)
@@ -123,26 +93,93 @@ class CamaraClient:
         if cached is not None:
             log.info("Device status cache hit for %s", phone)
             return cached
-        try:
-            client = self._ensure_client()
-            result = client.device_status.check_connectivity(
-                device={"phone_number": phone}
-            )
-            status_val = getattr(result, "status", "UNKNOWN")
-            out = {
-                "reachable": status_val == "ACTIVE",
-                "status": status_val,
-                "raw": getattr(result, "__dict__", {}),
-            }
-            _cache.set("device", phone, out)
-            return out
-        except Exception as e:
-            log.warning("Device status check failed: %s", e)
-            return {"reachable": False, "status": "UNKNOWN", "error": str(e)}
+        data = self._post("device-status/v0/connectivity", {"device": {"phoneNumber": phone}})
+        if "error" in data:
+            return {"reachable": False, "status": "UNKNOWN", "error": data["error"]}
+        status_val = data.get("connectivityStatus", "UNKNOWN")
+        out = {
+            "reachable": status_val in ("CONNECTED_DATA", "CONNECTED_SMS"),
+            "status": status_val,
+        }
+        _cache.set("device", phone, out)
+        return out
+
+    # SIM Swap Check
+    def check_sim_swap(self, phone: str, max_age_hours: int = 240) -> dict:
+        """Check if SIM was swapped recently."""
+        phone = self._resolve_phone(phone)
+        cached = _cache.get("simswap", phone)
+        if cached is not None:
+            log.info("SIM swap cache hit for %s", phone)
+            return cached
+        data = self._post(
+            "passthrough/camara/v1/sim-swap/sim-swap/v0/check",
+            {"phoneNumber": phone, "maxAge": max_age_hours},
+        )
+        if "error" in data:
+            return {"swapped": False, "risk_level": "unknown", "error": data["error"]}
+        swapped = data.get("swapped", False)
+        out = {
+            "swapped": bool(swapped),
+            "risk_level": "high" if swapped else "low",
+        }
+        _cache.set("simswap", phone, out)
+        return out    # Location Verification
+    def verify_location(
+        self, phone: str, lat: float, lon: float, radius_m: int = 50000, max_age: int = 120
+    ) -> dict:
+        """Verify if a device is within a geographic area."""
+        phone = self._resolve_phone(phone)
+        area_key = f"{lat},{lon},{radius_m}"
+        cached = _cache.get("location", phone, area=area_key)
+        if cached is not None:
+            log.info("Location cache hit for %s", phone)
+            return cached
+        data = self._post("location-verification/v1/verify", {
+            "device": {"phoneNumber": phone},
+            "area": {
+                "areaType": "CIRCLE",
+                "center": {"latitude": lat, "longitude": lon},
+                "radius": radius_m,
+            },
+            "maxAge": max_age,
+        })
+        if "error" in data:
+            return {"verified": False, "confidence": "unknown", "error": data["error"]}
+        verified = data.get("verificationResult", "FALSE")
+        if isinstance(verified, str):
+            verified = verified.upper() == "TRUE"
+        out = {
+            "verified": bool(verified),
+            "confidence": "high" if verified else "low",
+            "last_location_time": data.get("lastLocationTime"),
+        }
+        _cache.set("location", phone, out, area=area_key)
+        return out
 
 
+    # Number Verification (requires OAuth, simplified for demo)
+    def verify_number(self, phone: str) -> dict:
+        """Verify if a phone number is real. Falls back to SIM swap check."""
+        phone = self._resolve_phone(phone)
+        cached = _cache.get("number", phone)
+        if cached is not None:
+            log.info("Number verification cache hit for %s", phone)
+            return cached
+        # Number Verification requires OAuth 3-legged flow.
+        # For demo, use SIM swap + device status as proxy.
+        sim = self.check_sim_swap(phone)
+        device = self.check_device_status(phone)
+        valid = device.get("reachable", False) and not sim.get("swapped", True)
+        out = {"valid": valid, "source": "sim_swap+device_status"}
+        _cache.set("number", phone, out)
+        return out
+
+
+    # Geofencing
     def create_geofence(
-        self, lat: float, lon: float, radius_m: int = 500, webhook_url: str | None = None,
+        self, lat: float, lon: float, radius_m: int = 2000,
+        phone: str = "+99999991000", webhook_url: str | None = None,
     ) -> dict:
         """Create a geofencing subscription for a circular area."""
         cache_key = f"{lat},{lon},{radius_m}"
@@ -150,50 +187,53 @@ class CamaraClient:
         if cached is not None:
             log.info("Geofence cache hit for %s", cache_key)
             return cached
-        try:
-            client = self._ensure_client()
-            result = client.geofencing.create_subscription(
-                protocol="HTTP",
-                sink=webhook_url or "https://example.com/webhook",
-                types=[
-                    "org.camaraproject.geofencing-subscriptions.v0.area-entered",
-                    "org.camaraproject.geofencing-subscriptions.v0.area-left",
-                ],
-                config={
+        data = self._post("passthrough/camara/v0/geofencing/subscriptions", {
+            "protocol": "HTTP",
+            "sink": webhook_url or "https://example.com/webhook",
+            "types": [
+                "org.camaraproject.geofencing-subscriptions.v0.area-entered",
+                "org.camaraproject.geofencing-subscriptions.v0.area-left",
+            ],
+            "config": {
+                "subscriptionDetail": {
+                    "device": {"phoneNumber": phone},
                     "area": {
                         "areaType": "CIRCLE",
-                        "areaValue": f"{lat},{lon},{radius_m}",
-                    }
+                        "center": {"latitude": lat, "longitude": lon},
+                        "radius": radius_m,
+                    },
                 },
-            )
-            sub_id = getattr(result, "subscription_id", None)
-            out = {
-                "subscription_id": sub_id,
-                "status": "active",
-                "raw": getattr(result, "__dict__", {}),
-            }
-            _cache.set("geofence", cache_key, out)
-            return out
-        except Exception as e:
-            log.warning("Geofence creation failed: %s", e)
-            return {"subscription_id": None, "status": "failed", "error": str(e)}
+                "initialEvent": True,
+                "subscriptionMaxEvents": 10,
+            },
+        })
+        if "error" in data:
+            return {"subscription_id": None, "status": "failed", "error": data["error"]}
+        out = {
+            "subscription_id": data.get("id"),
+            "status": "active",
+        }
+        _cache.set("geofence", cache_key, out)
+        return out
 
+
+    # Full Validation Pipeline
     def validate_report(
         self, phone: str, lat: float | None = None, lon: float | None = None,
     ) -> dict:
         """Run all CAMARA checks on an incident report. Returns trust score."""
         results = {}
-        results["number"] = self.verify_number(phone)
         results["device"] = self.check_device_status(phone)
+        results["sim_swap"] = self.check_sim_swap(phone)
         if lat is not None and lon is not None:
             results["location"] = self.verify_location(phone, lat, lon)
 
         score = 0
         checks = 0
-        if results["number"].get("valid"):
+        if results["device"].get("reachable"):
             score += 35
         checks += 1
-        if results["device"].get("reachable"):
+        if not results["sim_swap"].get("swapped"):
             score += 30
         checks += 1
         if "location" in results:
