@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
-from ..sentinel.camara_client import CamaraClient
+from typing import Optional
+from sentinel.camara_client import camara_client
 
 router = APIRouter()
 
@@ -13,12 +14,9 @@ class ValidateRequest(BaseModel):
 
 @router.post("/")
 async def validate_report(req: ValidateRequest):
-    """Validate an incident report using CAMARA APIs."""
-    client = CamaraClient()
-    result = await client.validate_report(
-        phone_number=req.phone_number,
-        incident_lat=req.latitude,
-        incident_lon=req.longitude,
+    """Run CAMARA validation on a phone number and location."""
+    result = camara_client.validate_report(
+        phone=req.phone_number, lat=req.latitude, lon=req.longitude,
     )
     return result
 
@@ -26,16 +24,12 @@ async def validate_report(req: ValidateRequest):
 @router.post("/location")
 async def verify_location(req: ValidateRequest):
     """Verify reporter location only."""
-    client = CamaraClient()
-    return await client.verify_location(
-        phone_number=req.phone_number,
-        target_lat=req.latitude,
-        target_lon=req.longitude,
+    return camara_client.verify_location(
+        phone=req.phone_number, lat=req.latitude, lon=req.longitude,
     )
 
 
-@router.post("/number")
-async def verify_number(phone_number: str):
-    """Verify phone number only."""
-    client = CamaraClient()
-    return await client.verify_number(phone_number)
+@router.post("/device")
+async def check_device(phone_number: str):
+    """Check device connectivity status."""
+    return camara_client.check_device_status(phone_number)

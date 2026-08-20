@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 from typing import Optional
 import httpx
-from ..sentinel.config import get_settings
+from sentinel.config import get_settings
 
 router = APIRouter()
 settings = get_settings()

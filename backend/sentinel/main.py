@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .config import get_settings
+from sentinel.config import get_settings
 from routers import incidents, validate, alerts
 
 settings = get_settings()
@@ -32,3 +32,22 @@ async def root():
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
+
+@app.get("/api/stats")
+async def get_stats():
+    """Aggregate stats for dashboard."""
+    from routers.incidents import _get_supabase
+    db = _get_supabase()
+    try:
+        inc = db.table("incidents").select("id", count="exact").execute()
+        val = db.table("validations").select("id", count="exact").execute()
+        ale = db.table("alerts").select("id", count="exact").execute()
+        return {
+            "total_incidents": inc.count or 0,
+            "total_validations": val.count or 0,
+            "total_alerts": ale.count or 0,
+            "status": "ok",
+        }
+    except Exception as e:
+        return {"total_incidents": 0, "total_validations": 0, "total_alerts": 0, "error": str(e)}
