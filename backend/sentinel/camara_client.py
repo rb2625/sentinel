@@ -1,140 +1,211 @@
-import httpx
+"""CAMARA API client using Nokia Network-as-Code SDK."""
+
+import time
+import hashlib
+import logging
+from typing import Any
+
+from network_as_code import NetworkAsCodeApi
 from .config import get_settings
+
+log = logging.getLogger("sentinel.camara")
+
+
+class CamaraCache:
+    """Simple in-memory TTL cache for CAMARA API responses."""
+
+    def __init__(self, ttl_seconds: int = 300):
+        self.ttl = ttl_seconds
+        self._store: dict[str, tuple[float, Any]] = {}
+
+    def _key(self, namespace: str, phone: str, **kwargs) -> str:
+        raw = f"{namespace}:{phone}:{sorted(kwargs.items())}"
+        return hashlib.sha256(raw.encode()).hexdigest()[:16]
+
+    def get(self, namespace: str, phone: str, **kwargs) -> Any | None:
+        key = self._key(namespace, phone, **kwargs)
+        if key in self._store:
+            ts, val = self._store[key]
+            if time.time() - ts < self.ttl:
+                return val
+            del self._store[key]
+        return None
+
+    def set(self, namespace: str, phone: str, value: Any, **kwargs) -> None:
+        key = self._key(namespace, phone, **kwargs)
+        self._store[key] = (time.time(), value)
+
+
+_cache = CamaraCache(ttl_seconds=300)
+
+
+def _get_client() -> NetworkAsCodeApi:
+    settings = get_settings()
+    return NetworkAsCodeApi(
+        api_key=settings.nokia_nac_api_key,
+        rapidapi_host="network-as-code.nokia.rapidapi.com",
+    )
 
 
 class CamaraClient:
-    """Client for Nokia Network-as-Code CAMARA APIs."""
+    """Nokia NaC CAMARA API client with caching and fallback."""
 
     def __init__(self):
-        settings = get_settings()
-        self.base_url = settings.nokia_nac_base_url
-        self.api_key = settings.nokia_nac_api_key
-        self.headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json",
-        }
+        self._client: NetworkAsCodeApi | None = None
 
-    async def verify_location(
-        self, phone_number: str, target_lat: float, target_lon: float,
-        max_distance_meters: float = 500.0,
+    def _ensure_client(self) -> NetworkAsCodeApi:
+        if self._client is None:
+            self._client = _get_client()
+        return self._client
+
+    def _resolve_phone(self, phone: str) -> str:
+        if not phone.startswith("+"):
+            if phone.startswith("00"):
+                return "+" + phone[2:]
+            return "+971" + phone
+        return phone
+
+    def verify_number(self, phone: str) -> dict:
+        """Verify if a phone number is real and active."""
+        phone = self._resolve_phone(phone)
+        cached = _cache.get("number", phone)
+        if cached is not None:
+            log.info("Number verification cache hit for %s", phone)
+            return cached
+        try:
+            client = self._ensure_client()
+            result = client.number_verification.verify(phone_number=phone)
+            out = {
+                "valid": True,
+                "carrier": getattr(result, "carrier", None),
+                "raw": getattr(result, "__dict__", {}),
+            }
+            _cache.set("number", phone, out)
+            return out
+        except Exception as e:
+            log.warning("Number verification failed: %s", e)
+            return {"valid": False, "carrier": None, "error": str(e)}
+
+
+    def verify_location(
+        self, phone: str, lat: float, lon: float, radius_m: int = 1000
     ) -> dict:
-        """Location Verification API."""
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            try:
-                response = await client.post(
-                    f"{self.base_url}/camara/location/v2/verify",
-                    headers=self.headers,
-                    json={
-                        "phoneNumber": phone_number,
-                        "targetLat": target_lat,
-                        "targetLon": target_lon,
-                        "maxDistance": max_distance_meters,
-                    },
-                )
-                if response.status_code == 200:
-                    data = response.json()
-                    return {
-                        "verified": data.get("verified", False),
-                        "distance_meters": data.get("distanceMeters", -1),
-                        "confidence": data.get("confidence", 0.0),
-                        "error": None,
-                    }
-                return {"verified": False, "error": f"API {response.status_code}"}
-            except Exception as e:
-                return {"verified": False, "error": str(e)}
+        """Verify if a device is within a geographic area."""
+        phone = self._resolve_phone(phone)
+        area_key = f"{lat},{lon},{radius_m}"
+        cached = _cache.get("location", phone, area=area_key)
+        if cached is not None:
+            log.info("Location verification cache hit for %s", phone)
+            return cached
+        try:
+            client = self._ensure_client()
+            result = client.location.verify(
+                device={"phone_number": phone},
+                area={"area_type": "CIRCLE", "area_value": f"{lat},{lon},{radius_m}"},
+            )
+            verified = getattr(result, "verification_result", False)
+            out = {
+                "verified": verified,
+                "distance_m": getattr(result, "distance", None),
+                "confidence": "high" if verified else "low",
+                "raw": getattr(result, "__dict__", {}),
+            }
+            _cache.set("location", phone, out, area=area_key)
+            return out
+        except Exception as e:
+            log.warning("Location verification failed: %s", e)
+            return {"verified": False, "distance_m": None, "confidence": "unknown", "error": str(e)}
 
-    async def verify_number(self, phone_number: str) -> dict:
-        """Number Verification API."""
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            try:
-                response = await client.post(
-                    f"{self.base_url}/camara/number-verify/v0/verify",
-                    headers=self.headers,
-                    json={"phoneNumber": phone_number},
-                )
-                if response.status_code == 200:
-                    data = response.json()
-                    return {
-                        "verified": data.get("verified", False),
-                        "subscriber_name": data.get("subscriberName", ""),
-                        "error": None,
-                    }
-                return {"verified": False, "error": f"API {response.status_code}"}
-            except Exception as e:
-                return {"verified": False, "error": str(e)}
+    def check_device_status(self, phone: str) -> dict:
+        """Check if a device is connected to the network."""
+        phone = self._resolve_phone(phone)
+        cached = _cache.get("device", phone)
+        if cached is not None:
+            log.info("Device status cache hit for %s", phone)
+            return cached
+        try:
+            client = self._ensure_client()
+            result = client.device_status.check_connectivity(
+                device={"phone_number": phone}
+            )
+            status_val = getattr(result, "status", "UNKNOWN")
+            out = {
+                "reachable": status_val == "ACTIVE",
+                "status": status_val,
+                "raw": getattr(result, "__dict__", {}),
+            }
+            _cache.set("device", phone, out)
+            return out
+        except Exception as e:
+            log.warning("Device status check failed: %s", e)
+            return {"reachable": False, "status": "UNKNOWN", "error": str(e)}
 
-    async def check_device_status(self, phone_number: str) -> dict:
-        """Device Status API."""
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            try:
-                response = await client.get(
-                    f"{self.base_url}/camara/device-status/v1/query",
-                    headers=self.headers,
-                    params={"phoneNumber": phone_number},
-                )
-                if response.status_code == 200:
-                    data = response.json()
-                    return {
-                        "active": data.get("active", False),
-                        "roaming": data.get("roaming", False),
-                        "carrier": data.get("carrier", ""),
-                        "error": None,
-                    }
-                return {"active": False, "error": f"API {response.status_code}"}
-            except Exception as e:
-                return {"active": False, "error": str(e)}
 
-    async def check_geofence(
-        self, phone_number: str, zone_lat: float, zone_lon: float,
-        zone_radius_meters: float = 1000.0,
+    def create_geofence(
+        self, lat: float, lon: float, radius_m: int = 500, webhook_url: str | None = None,
     ) -> dict:
-        """Geofencing API."""
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            try:
-                response = await client.post(
-                    f"{self.base_url}/camara/geofencing/v1/verify",
-                    headers=self.headers,
-                    json={
-                        "phoneNumber": phone_number,
-                        "zone": {"latitude": zone_lat, "longitude": zone_lon,
-                                 "radius": zone_radius_meters},
-                    },
-                )
-                if response.status_code == 200:
-                    data = response.json()
-                    return {
-                        "inside_zone": data.get("inside", False),
-                        "distance_meters": data.get("distanceMeters", -1),
-                        "error": None,
+        """Create a geofencing subscription for a circular area."""
+        cache_key = f"{lat},{lon},{radius_m}"
+        cached = _cache.get("geofence", cache_key)
+        if cached is not None:
+            log.info("Geofence cache hit for %s", cache_key)
+            return cached
+        try:
+            client = self._ensure_client()
+            result = client.geofencing.create_subscription(
+                protocol="HTTP",
+                sink=webhook_url or "https://example.com/webhook",
+                types=[
+                    "org.camaraproject.geofencing-subscriptions.v0.area-entered",
+                    "org.camaraproject.geofencing-subscriptions.v0.area-left",
+                ],
+                config={
+                    "area": {
+                        "areaType": "CIRCLE",
+                        "areaValue": f"{lat},{lon},{radius_m}",
                     }
-                return {"inside_zone": False, "error": f"API {response.status_code}"}
-            except Exception as e:
-                return {"inside_zone": False, "error": str(e)}
+                },
+            )
+            sub_id = getattr(result, "subscription_id", None)
+            out = {
+                "subscription_id": sub_id,
+                "status": "active",
+                "raw": getattr(result, "__dict__", {}),
+            }
+            _cache.set("geofence", cache_key, out)
+            return out
+        except Exception as e:
+            log.warning("Geofence creation failed: %s", e)
+            return {"subscription_id": None, "status": "failed", "error": str(e)}
 
-    async def validate_report(
-        self, phone_number: str, incident_lat: float, incident_lon: float,
+    def validate_report(
+        self, phone: str, lat: float | None = None, lon: float | None = None,
     ) -> dict:
-        """Run all validation checks on an incoming incident report."""
-        location = await self.verify_location(phone_number, incident_lat, incident_lon)
-        number = await self.verify_number(phone_number)
-        device = await self.check_device_status(phone_number)
+        """Run all CAMARA checks on an incident report. Returns trust score."""
+        results = {}
+        results["number"] = self.verify_number(phone)
+        results["device"] = self.check_device_status(phone)
+        if lat is not None and lon is not None:
+            results["location"] = self.verify_location(phone, lat, lon)
 
-        scores = []
-        if location.get("verified"):
-            scores.append(0.5)
-        if number.get("verified"):
-            scores.append(0.3)
-        if device.get("active"):
-            scores.append(0.2)
-
-        overall = sum(scores) if scores else 0.0
-        confidence = location.get("confidence", 0.0) if location.get("verified") else 0.0
+        score = 0
+        checks = 0
+        if results["number"].get("valid"):
+            score += 35
+        checks += 1
+        if results["device"].get("reachable"):
+            score += 30
+        checks += 1
+        if "location" in results:
+            if results["location"].get("verified"):
+                score += 35
+            checks += 1
 
         return {
-            "location_verified": location.get("verified", False),
-            "number_verified": number.get("verified", False),
-            "device_active": device.get("active", False),
-            "location_confidence": confidence,
-            "overall_score": overall,
-            "details": {"location": location, "number": number, "device": device},
+            "trust_score": score,
+            "checks_run": checks,
+            "results": results,
         }
+
+
+camara_client = CamaraClient()
