@@ -124,8 +124,7 @@ export default function ValidatePage() {
               <div className="space-y-2">
                 <div className="flex items-start gap-2">
                   <span className="text-xs font-mono text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded">VALIDATOR</span>
-                  <p class
-="text-sm text-zinc-400">{result.validation?.reasoning || "N/A"}</p>
+                  <p className="text-sm text-zinc-400">{result.validation?.reasoning || "N/A"}</p>
                 </div>
                 <div className="flex items-start gap-2">
                   <span className="text-xs font-mono text-indigo-400 bg-indigo-400/10 px-2 py-0.5 rounded">CLASSIFIER</span>
