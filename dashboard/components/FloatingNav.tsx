@@ -23,10 +23,10 @@ const colors: Record<string, string> = {
 
 export function FloatingNav() {
   const pathname = usePathname();
-  const { locale, setLocale, t } = useLang();
+  const { t } = useLang();
 
   return (
-    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2">
+    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
       <nav className="glass rounded-2xl px-2 py-2 flex items-center gap-1 shadow-2xl border border-white/[0.08]">
         {tabs.map((tab) => {
           const isActive = pathname === tab.href;
@@ -44,14 +44,6 @@ export function FloatingNav() {
           );
         })}
       </nav>
-
-      <button
-        onClick={() => setLocale(locale === "en" ? "ar" : "en")}
-        className="glass rounded-xl px-3 py-3 shadow-2xl border border-white/[0.08] text-zinc-400 hover:text-amber-400 transition-all duration-300 hover:border-amber-500/30"
-        title={locale === "en" ? "Switch to Arabic" : "Switch to English"}
-      >
-        <span className="text-sm font-bold">{locale === "en" ? "AR" : "EN"}</span>
-      </button>
     </div>
   );
 }

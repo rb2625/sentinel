@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { FloatingNav } from "../components/FloatingNav";
 import { LangProvider } from "../lib/lang-context";
+import { LangToggle } from "../components/LangToggle";
 
 export const metadata: Metadata = {
   title: "SENTINEL - Urban Incident Detection",
@@ -32,6 +33,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                   LIVE
                 </span>
+                <LangToggle />
               </div>
             </div>
           </header>

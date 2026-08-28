@@ -1,34 +1,82 @@
 "use client";
 import { useEffect, useState } from "react";
-import { KpiCard } from "../components/KpiCard";
-import { Section } from "../components/Section";
-import { SeverityBadge } from "../components/SeverityBadge";
+import { useLang } from "../lib/lang-context";
 
 export default function OverviewPage() {
+  const { t, locale } = useLang();
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+
   useEffect(() => {
-    fetch("/api/data?view=overview").then(r => r.ok ? r.json() : null)
-      .then(d => setData(d)).catch(() => {}).finally(() => setLoading(false));
+    fetch("/api/data?view=overview")
+      .then((r) => (r.ok ? r.json() : null))
+      .then(setData)
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, []);
-  if (loading) return (<div className="space-y-6"><div className="grid grid-cols-2 lg:grid-cols-4 gap-4">{[...Array(4)].map((_,i) => <div key={i} className="skeleton h-28 rounded-2xl" />)}</div><div className="skeleton h-64 rounded-2xl" /></div>);
-  const byType = data?.by_type || {};
-  const bySev = data?.by_severity || { critical:0, high:0, medium:0, low:0 };
+
+  if (loading) return <div className="space-y-4">{[1, 2, 3].map((i) => <div key={i} className="skeleton h-24 rounded-2xl" />)}</div>;
+
+  const stats = data?.stats || {};
+  const alerts = data?.recent_incidents || [];
+  const kpis = [
+    { label: t("overview.total_incidents"), value: stats.total_incidents || 0, color: "text-white" },
+    { label: t("overview.active_alerts"), value: stats.active_alerts || 0, color: "text-amber-400" },
+    { label: t("overview.avg_trust"), value: `${Math.round((stats.avg_trust || 0) * 100)}%`, color: "text-emerald-400" },
+  ];
+
+  const severityData = data?.by_severity || [];
+
   return (
-    <div className="space-y-8">
-      <div className="animate-fade-up"><h1 className="text-display text-3xl sm:text-4xl font-bold bg-gradient-to-r from-indigo-400 via-violet-400 to-rose-400 bg-clip-text text-transparent">Command Center</h1><p className="text-zinc-500 text-sm mt-1 font-mono">Real-time urban incident monitoring</p></div>
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard title="Total Incidents" value={data?.total_incidents ?? 0} subtitle="since launch" color="text-indigo-400" delay={0} />
-        <KpiCard title="Validated" value={data?.validated ?? 0} subtitle="network verified" color="text-emerald-400" delay={0.1} />
-        <KpiCard title="Active Alerts" value={data?.active_alerts ?? 0} subtitle="requiring attention" color="text-rose-400" delay={0.2} />
-        <KpiCard title="Avg Response" value={data?.avg_response_time ?? "N/A"} subtitle="time to validate" color="text-violet-400" delay={0.3} />
+    <div className="space-y-6" dir={locale === "ar" ? "rtl" : "ltr"}>
+      <div>
+        <h1 className="text-2xl font-bold text-white">{t("overview.title")}</h1>
+        <p className="text-zinc-500 text-sm mt-1">{t("header.subtitle")}</p>
       </div>
-      <Section kicker="Distribution" title="By Severity">
-        <div className="grid grid-cols-4 gap-3">{Object.entries(bySev).map(([s,c]) => (<div key={s} className="glass rounded-xl p-3 text-center animate-fade-up"><SeverityBadge severity={s} /><div className="text-2xl font-bold text-display mt-2 text-sand-100">{String(c)}</div></div>))}</div>
-      </Section>
-      <Section kicker="Feed" title="Recent Incidents">
-        <div className="space-y-3">{(data?.recent_incidents ?? []).length === 0 ? (<div className="glass rounded-2xl p-8 text-center"><p className="text-zinc-500 text-sm">No incidents yet.</p></div>) : (data?.recent_incidents ?? []).slice(0,5).map((inc:any,i:number) => (<div key={i} className="glass rounded-xl p-4 animate-fade-up"><div className="flex items-center gap-2 mb-1"><span className="text-sm font-semibold text-sand-100 capitalize">{(inc.type||"other").replace(/_/g," ")}</span><SeverityBadge severity={inc.severity || "medium"} /></div><p className="text-sm text-zinc-400 line-clamp-2">{inc.description || ""}</p></div>))}</div>
-      </Section>
+
+      <div className="grid grid-cols-3 gap-4">
+        {kpis.map((kpi, i) => (
+          <div key={i} className="glass rounded-2xl p-5">
+            <p className="text-xs text-zinc-500 font-mono uppercase tracking-wider">{kpi.label}</p>
+            <p className={`text-3xl font-bold mt-2 ${kpi.color}`}>{kpi.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {severityData.length > 0 && (
+        <div className="glass rounded-2xl p-5">
+          <h3 className="text-sm font-semibold text-white mb-3">{t("overview.severity_breakdown")}</h3>
+          <div className="space-y-2">
+            {severityData.map((s: any) => (
+              <div key={s.severity} className="flex items-center gap-3">
+                <span className="text-xs text-zinc-400 w-20 capitalize">{s.severity}</span>
+                <div className="flex-1 bg-white/5 rounded-full h-2">
+                  <div className={`h-2 rounded-full ${s.severity === "critical" ? "bg-red-500" : s.severity === "high" ? "bg-orange-500" : s.severity === "medium" ? "bg-yellow-500" : "bg-green-500"}`}
+                    style={{ width: `${Math.min(100, (s.count / (stats.total_incidents || 1)) * 100)}%` }} />
+                </div>
+                <span className="text-xs text-zinc-500 w-8 text-right">{s.count}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="glass rounded-2xl p-5">
+        <h3 className="text-sm font-semibold text-white mb-3">{t("overview.recent_feed")}</h3>
+        {alerts.length === 0 ? (
+          <p className="text-zinc-500 text-sm">{t("overview.no_alerts")}</p>
+        ) : (
+          <div className="space-y-2">
+            {alerts.slice(0, 5).map((a: any) => (
+              <div key={a.id} className="flex items-center gap-3 bg-white/5 rounded-lg p-3">
+                <span className={`w-2 h-2 rounded-full ${a.severity === "critical" ? "bg-red-500" : a.severity === "high" ? "bg-orange-500" : "bg-yellow-500"}`} />
+                <span className="text-sm text-white flex-1">{a.description?.substring(0, 60) || a.incident_type}</span>
+                <span className="text-xs text-zinc-500">{a.location_name || ""}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
