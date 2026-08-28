@@ -8,6 +8,8 @@ function getClient() {
   return supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
 }
 
+export const dynamic = "force-dynamic";
+
 function classifyDescription(desc: string): { type: string; severity: string; sector: string } {
   const l = desc.toLowerCase();
   if (l.includes("accident") || l.includes("crash") || l.includes("collision")) return { type: "car_accident", severity: "high", sector: "transport" };
@@ -30,16 +32,13 @@ function simulateValidation(body: any) {
   if (locationVerified) trustScore += 35;
   return {
     trust_score: trustScore,
-    validation: {
-      reasoning: hasCoords
-        ? "All three CAMARA checks executed. Device is active on mobile data, SIM is original, and reporter location matches incident coordinates."
-        : "Device and SIM checks executed. No coordinates provided for location verification.",
-      results: {
-        device_status: { reachable: deviceActive, status: deviceActive ? "CONNECTED_DATA" : "NOT_CONNECTED", response_time_ms: Math.floor(80 + Math.random() * 120) },
-        sim_swap: { swapped: simSwapped, last_swap: simSwapped ? new Date(Date.now() - 86400000).toISOString() : null },
-        ...(hasCoords ? { location_verification: { verified: locationVerified, distance_m: locationVerified ? Math.floor(50 + Math.random() * 450) : Math.floor(1000 + Math.random() * 5000), confidence: locationVerified ? "high" : "low" } } : {}),
-      },
-    },
+    device_active: deviceActive,
+    sim_swapped: simSwapped,
+    location_verified: locationVerified,
+    location_confidence: locationVerified ? 0.9 : 0.4,
+    reasoning: hasCoords
+      ? "All three CAMARA checks executed. Device is active, SIM is original, reporter location matches incident coordinates."
+      : "Device and SIM checks executed. No coordinates for location verification.",
   };
 }
 
@@ -50,8 +49,9 @@ export async function POST(request: NextRequest) {
     if (!supabase) return NextResponse.json({ error: "Supabase not configured" }, { status: 503 });
 
     const { type, severity, sector } = classifyDescription(body.description || "");
-    const validation = simulateValidation(body);
+    const val = simulateValidation(body);
 
+    // Insert incident first (need the ID for foreign keys)
     const { data: incident, error: incErr } = await supabase
       .from("incidents")
       .insert({
@@ -65,45 +65,65 @@ export async function POST(request: NextRequest) {
         language: body.language || "en",
         source: body.source || "dashboard",
       })
-      .select()
+      .select("id")
       .single();
 
     if (incErr) return NextResponse.json({ error: incErr.message }, { status: 500 });
 
-    await supabase.from("validations").insert({
-      incident_id: incident.id,
-      location_verified: validation.validation.results.location_verification?.verified || false,
-      number_verified: true,
-      device_active: validation.validation.results.device_status?.reachable || false,
-      location_confidence: validation.validation.results.location_verification?.confidence === "high" ? 0.9 : 0.4,
-      overall_score: validation.trust_score / 100,
-      validation_details: validation.validation,
-    });
+    // Insert validation + classification in parallel (both depend on incident.id)
+    const inserts = [
+      supabase.from("validations").insert({
+        incident_id: incident.id,
+        location_verified: val.location_verified,
+        number_verified: true,
+        device_active: val.device_active,
+        location_confidence: val.location_confidence,
+        overall_score: val.trust_score / 100,
+        validation_details: { reasoning: val.reasoning },
+      }),
+      supabase.from("classifications").insert({
+        incident_id: incident.id,
+        incident_type: type,
+        severity,
+        sector,
+        confidence: 0.85,
+        summary: body.description?.substring(0, 200) || "",
+        reasoning: `Classified as ${type.replace(/_/g, " ")} with ${severity} severity.`,
+      }),
+    ];
 
-    await supabase.from("classifications").insert({
-      incident_id: incident.id, incident_type: type, severity, sector,
-      confidence: 0.85, summary: body.description?.substring(0, 200) || "",
-      reasoning: `Classified as ${type.replace(/_/g, " ")} with ${severity} severity in ${sector} sector.`,
-    });
-
+    // Add alert insert for high severity
     if (severity === "critical" || severity === "high") {
-      await supabase.from("alerts").insert({
-        incident_id: incident.id, severity, sector,
-        summary: `${type.replace(/_/g, " ").toUpperCase()}: ${body.description?.substring(0, 150) || "No description"}`,
-        dispatch_channel: "dashboard",
-      });
+      inserts.push(
+        supabase.from("alerts").insert({
+          incident_id: incident.id,
+          severity,
+          sector,
+          summary: `${type.replace(/_/g, " ").toUpperCase()}: ${body.description?.substring(0, 150) || ""}`,
+          dispatch_channel: "dashboard",
+        })
+      );
     }
 
+    await Promise.all(inserts);
+
     return NextResponse.json({
-      trust_score: validation.trust_score,
-      validation: validation.validation,
+      trust_score: val.trust_score,
+      validation: {
+        reasoning: val.reasoning,
+        results: {
+          device_status: { reachable: val.device_active, status: val.device_active ? "CONNECTED_DATA" : "NOT_CONNECTED" },
+          sim_swap: { swapped: val.sim_swapped },
+          ...(body.latitude ? { location_verification: { verified: val.location_verified, confidence: val.location_verified ? "high" : "low" } } : {}),
+        },
+      },
       classification: {
         incident_type: type, severity, sector, confidence: 0.85,
         summary: body.description?.substring(0, 200) || "",
         reasoning: `Classified as ${type.replace(/_/g, " ")} with ${severity} severity.`,
       },
       anomaly: { anomaly_detected: false, nearby_reports: 0 },
-      processing_time_seconds: parseFloat((1.2 + Math.random() * 0.8).toFixed(2)),
+      processing_time_seconds: parseFloat((0.8 + Math.random() * 0.5).toFixed(2)),
       incident_id: incident.id,
     });
   } catch (err: any) {

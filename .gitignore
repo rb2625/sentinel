@@ -49,3 +49,6 @@ logs/
 *.key
 credentials.json
 docs/~$*.pptx
+
+# Dashboard env
+dashboard/.env
