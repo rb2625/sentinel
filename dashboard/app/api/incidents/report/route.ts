@@ -3,9 +3,86 @@ import { createClient } from "@supabase/supabase-js";
 
 const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+const NOKIA_BASE = process.env.NOKIA_NAC_BASE_URL || "https://network-as-code.p-eu.apihub.nokia.io";
+const NOKIA_KEY = process.env.NOKIA_NAC_API_KEY || "";
 
 function getClient() {
   return supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
+}
+
+async function callNokia(path: string, body: Record<string, unknown>): Promise<Record<string, unknown>> {
+  try {
+    const resp = await fetch(`${NOKIA_BASE}/${path}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-rapidapi-key": NOKIA_KEY,
+        "x-rapidapi-host": "network-as-code.nokia.rapidapi.com",
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!resp.ok) {
+      const text = await resp.text();
+      console.error(`Nokia ${path} returned ${resp.status}:`, text.substring(0, 200));
+      return { error: text, status: resp.status };
+    }
+    return await resp.json();
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error(`Nokia ${path} failed:`, msg);
+    return { error: msg };
+  }
+}
+
+async function validateWithCamara(phone: string, lat?: number, lng?: number) {
+  const results: Record<string, unknown> = {};
+
+  const deviceResult = await callNokia("device-status/v0/connectivity", {
+    device: { phoneNumber: phone },
+  });
+  if (!deviceResult.error) {
+    results.device_status = {
+      reachable: deviceResult.connectivityStatus === "CONNECTED_DATA" || deviceResult.connectivityStatus === "CONNECTED_SMS",
+      status: deviceResult.connectivityStatus || "UNKNOWN",
+    };
+  } else {
+    results.device_status = { reachable: false, status: "UNAVAILABLE" };
+  }
+
+  if (lat && lng) {
+    const locResult = await callNokia("location-verification/v1/verify", {
+      device: { phoneNumber: phone },
+      area: { areaType: "CIRCLE", center: { latitude: lat, longitude: lng }, radius: 5000 },
+      maxAge: 120,
+    });
+    if (!locResult.error) {
+      results.location_verification = {
+        verified: locResult.verificationResult === "TRUE",
+        confidence: locResult.verificationResult === "TRUE" ? 0.92 : 0.3,
+      };
+    } else {
+      results.location_verification = { verified: false, confidence: 0 };
+    }
+  }
+
+  const simResult = await callNokia("sim-swap/sim-swap/v0/check", {
+    phoneNumber: phone,
+    maxAge: 240,
+  });
+  if (!simResult.error) {
+    results.sim_swap = { swapped: simResult.swapped === true };
+  } else {
+    results.sim_swap = { swapped: false };
+  }
+
+  let trustScore = 0;
+  if ((results.device_status as Record<string, unknown>)?.reachable) trustScore += 35;
+  if (!(results.sim_swap as Record<string, unknown>)?.swapped) trustScore += 30;
+  if ((results.location_verification as Record<string, unknown>)?.verified) trustScore += 35;
+  else trustScore += 10;
+
+  return { trust_score: trustScore, results };
 }
 
 function classifyDescription(desc: string): { type: string; severity: string; sector: string } {
@@ -19,42 +96,36 @@ function classifyDescription(desc: string): { type: string; severity: string; se
   return { type: "other", severity: "medium", sector: "general" };
 }
 
-function simulateValidation(body: any) {
-  const hasCoords = body.latitude && body.longitude;
-  const deviceActive = Math.random() > 0.15;
-  const simSwapped = Math.random() < 0.05;
-  const locationVerified = hasCoords ? Math.random() > 0.2 : false;
-  let trustScore = 0;
-  if (deviceActive) trustScore += 35;
-  if (!simSwapped) trustScore += 30;
-  if (locationVerified) trustScore += 35;
-  return { trust_score: trustScore, device_active: deviceActive, sim_swapped: simSwapped, location_verified: locationVerified, location_confidence: locationVerified ? 0.9 : 0.4,
-    reasoning: hasCoords ? "All three CAMARA checks executed. Device active, SIM original, reporter at incident location." : "Device and SIM checks executed. No coordinates for location verification." };
-}
-
-async function insertSupabase(supabase: any, table: string, data: any): Promise<any> {
-  const result = await supabase.from(table).insert(data);
+async function insertSupabase(supabase: any, table: string, data: Record<string, unknown>) {
+  const result = await supabase.from(table).insert(data as never);
   if (result.error) console.error(`Insert ${table} failed:`, result.error.message);
   return result;
 }
 
 export async function POST(request: NextRequest) {
+  const startTime = Date.now();
   try {
     const body = await request.json();
     const supabase = getClient();
     if (!supabase) return NextResponse.json({ error: "Supabase not configured" }, { status: 503 });
 
     const { type, severity, sector } = classifyDescription(body.description || "");
-    const val = simulateValidation(body);
+
+    console.log("Calling CAMARA APIs for", body.reporter_phone);
+    const validation = await validateWithCamara(body.reporter_phone, body.latitude, body.longitude);
+    console.log("CAMARA results:", JSON.stringify(validation.results));
 
     const { data: incident, error: incErr } = await supabase
       .from("incidents").insert({
         reporter_phone: body.reporter_phone || "+99999991000",
         reporter_name: body.reporter_name || null,
-        incident_type: type, description: body.description || "",
-        latitude: body.latitude || 25.2048, longitude: body.longitude || 55.2744,
+        incident_type: type,
+        description: body.description || "",
+        latitude: body.latitude || 25.2048,
+        longitude: body.longitude || 55.2744,
         location_name: body.location_name || null,
-        language: body.language || "en", source: body.source || "dashboard",
+        language: body.language || "en",
+        source: body.source || "dashboard",
       }).select("id").single();
 
     if (incErr || !incident) {
@@ -63,41 +134,57 @@ export async function POST(request: NextRequest) {
     }
 
     const iid = incident.id;
+    const vr = validation.results;
 
     await insertSupabase(supabase, "validations", {
-      incident_id: iid, location_verified: val.location_verified, number_verified: true,
-      device_active: val.device_active, location_confidence: val.location_confidence,
-      overall_score: val.trust_score / 100, validation_details: { reasoning: val.reasoning },
+      incident_id: iid,
+      location_verified: (vr.location_verification as Record<string, unknown>)?.verified ?? false,
+      number_verified: true,
+      device_active: (vr.device_status as Record<string, unknown>)?.reachable ?? false,
+      location_confidence: (vr.location_verification as Record<string, unknown>)?.confidence ?? 0,
+      overall_score: validation.trust_score / 100,
+      validation_details: vr,
     });
 
     await insertSupabase(supabase, "classifications", {
-      incident_id: iid, incident_type: type, severity, sector,
-      confidence: 0.85, summary: body.description?.substring(0, 200) || "",
-      reasoning: `Classified as ${type.replace(/_/g, " ")} with ${severity} severity in ${sector}.`,
+      incident_id: iid,
+      incident_type: type,
+      severity,
+      sector,
+      confidence: 0.85,
+      summary: body.description?.substring(0, 200) || "",
+      reasoning: `Classified as ${type.replace(/_/g, " ")} with ${severity} severity in ${sector}. CAMARA: device=${(vr.device_status as Record<string, unknown>)?.status}, location=${(vr.location_verification as Record<string, unknown>)?.verified ? "verified" : "not verified"}.`,
     });
 
     if (severity === "critical" || severity === "high") {
       await insertSupabase(supabase, "alerts", {
-        incident_id: iid, severity, sector,
-        summary: `${type.replace(/_/g, " ").toUpperCase()}: ${body.description?.substring(0, 150) || ""}`,
+        incident_id: iid,
+        severity,
+        sector,
+        summary: `${type.replace(/_/g, " ").toUpperCase()}: ${body.description?.substring(0, 150) || ""} [Trust: ${validation.trust_score}%]`,
         dispatch_channel: "dashboard",
       });
     }
 
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
+
     return NextResponse.json({
-      trust_score: val.trust_score,
-      validation: { reasoning: val.reasoning, results: {
-        device_status: { reachable: val.device_active, status: val.device_active ? "CONNECTED_DATA" : "NOT_CONNECTED" },
-        sim_swap: { swapped: val.sim_swapped },
-        ...(body.latitude ? { location_verification: { verified: val.location_verified, confidence: val.location_verified ? "high" : "low" } } : {}),
-      }},
-      classification: { incident_type: type, severity, sector, confidence: 0.85, summary: body.description?.substring(0, 200) || "",
-        reasoning: `Classified as ${type.replace(/_/g, " ")} with ${severity} severity.` },
+      trust_score: validation.trust_score,
+      validation: {
+        reasoning: `Device: ${(vr.device_status as Record<string, unknown>)?.status || "unknown"}, Location: ${(vr.location_verification as Record<string, unknown>)?.verified ? "verified" : "not verified"}, SIM: ${(vr.sim_swap as Record<string, unknown>)?.swapped ? "swapped" : "original"}`,
+        results: vr,
+      },
+      classification: {
+        incident_type: type, severity, sector, confidence: 0.85,
+        summary: body.description?.substring(0, 200) || "",
+        reasoning: `Classified as ${type.replace(/_/g, " ")} with ${severity} severity.`,
+      },
       anomaly: { anomaly_detected: false, nearby_reports: 0 },
-      processing_time_seconds: parseFloat((0.8 + Math.random() * 0.5).toFixed(2)),
+      processing_time_seconds: parseFloat(elapsed),
       incident_id: iid,
     });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
