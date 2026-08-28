@@ -8,8 +8,6 @@ function getClient() {
   return supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
 }
 
-export const dynamic = "force-dynamic";
-
 function classifyDescription(desc: string): { type: string; severity: string; sector: string } {
   const l = desc.toLowerCase();
   if (l.includes("accident") || l.includes("crash") || l.includes("collision")) return { type: "car_accident", severity: "high", sector: "transport" };
@@ -30,16 +28,14 @@ function simulateValidation(body: any) {
   if (deviceActive) trustScore += 35;
   if (!simSwapped) trustScore += 30;
   if (locationVerified) trustScore += 35;
-  return {
-    trust_score: trustScore,
-    device_active: deviceActive,
-    sim_swapped: simSwapped,
-    location_verified: locationVerified,
-    location_confidence: locationVerified ? 0.9 : 0.4,
-    reasoning: hasCoords
-      ? "All three CAMARA checks executed. Device is active, SIM is original, reporter location matches incident coordinates."
-      : "Device and SIM checks executed. No coordinates for location verification.",
-  };
+  return { trust_score: trustScore, device_active: deviceActive, sim_swapped: simSwapped, location_verified: locationVerified, location_confidence: locationVerified ? 0.9 : 0.4,
+    reasoning: hasCoords ? "All three CAMARA checks executed. Device active, SIM original, reporter at incident location." : "Device and SIM checks executed. No coordinates for location verification." };
+}
+
+async function insertSupabase(supabase: any, table: string, data: any): Promise<any> {
+  const result = await supabase.from(table).insert(data);
+  if (result.error) console.error(`Insert ${table} failed:`, result.error.message);
+  return result;
 }
 
 export async function POST(request: NextRequest) {
@@ -51,80 +47,55 @@ export async function POST(request: NextRequest) {
     const { type, severity, sector } = classifyDescription(body.description || "");
     const val = simulateValidation(body);
 
-    // Insert incident first (need the ID for foreign keys)
     const { data: incident, error: incErr } = await supabase
-      .from("incidents")
-      .insert({
+      .from("incidents").insert({
         reporter_phone: body.reporter_phone || "+99999991000",
         reporter_name: body.reporter_name || null,
-        incident_type: type,
-        description: body.description || "",
-        latitude: body.latitude || 25.2048,
-        longitude: body.longitude || 55.2744,
+        incident_type: type, description: body.description || "",
+        latitude: body.latitude || 25.2048, longitude: body.longitude || 55.2744,
         location_name: body.location_name || null,
-        language: body.language || "en",
-        source: body.source || "dashboard",
-      })
-      .select("id")
-      .single();
+        language: body.language || "en", source: body.source || "dashboard",
+      }).select("id").single();
 
-    if (incErr) return NextResponse.json({ error: incErr.message }, { status: 500 });
-
-    // Insert validation + classification in parallel (both depend on incident.id)
-    const inserts = [
-      supabase.from("validations").insert({
-        incident_id: incident.id,
-        location_verified: val.location_verified,
-        number_verified: true,
-        device_active: val.device_active,
-        location_confidence: val.location_confidence,
-        overall_score: val.trust_score / 100,
-        validation_details: { reasoning: val.reasoning },
-      }),
-      supabase.from("classifications").insert({
-        incident_id: incident.id,
-        incident_type: type,
-        severity,
-        sector,
-        confidence: 0.85,
-        summary: body.description?.substring(0, 200) || "",
-        reasoning: `Classified as ${type.replace(/_/g, " ")} with ${severity} severity.`,
-      }),
-    ];
-
-    // Add alert insert for high severity
-    if (severity === "critical" || severity === "high") {
-      inserts.push(
-        supabase.from("alerts").insert({
-          incident_id: incident.id,
-          severity,
-          sector,
-          summary: `${type.replace(/_/g, " ").toUpperCase()}: ${body.description?.substring(0, 150) || ""}`,
-          dispatch_channel: "dashboard",
-        })
-      );
+    if (incErr || !incident) {
+      console.error("Incident insert failed:", incErr);
+      return NextResponse.json({ error: incErr?.message || "Failed to create incident" }, { status: 500 });
     }
 
-    await Promise.all(inserts);
+    const iid = incident.id;
+
+    await insertSupabase(supabase, "validations", {
+      incident_id: iid, location_verified: val.location_verified, number_verified: true,
+      device_active: val.device_active, location_confidence: val.location_confidence,
+      overall_score: val.trust_score / 100, validation_details: { reasoning: val.reasoning },
+    });
+
+    await insertSupabase(supabase, "classifications", {
+      incident_id: iid, incident_type: type, severity, sector,
+      confidence: 0.85, summary: body.description?.substring(0, 200) || "",
+      reasoning: `Classified as ${type.replace(/_/g, " ")} with ${severity} severity in ${sector}.`,
+    });
+
+    if (severity === "critical" || severity === "high") {
+      await insertSupabase(supabase, "alerts", {
+        incident_id: iid, severity, sector,
+        summary: `${type.replace(/_/g, " ").toUpperCase()}: ${body.description?.substring(0, 150) || ""}`,
+        dispatch_channel: "dashboard",
+      });
+    }
 
     return NextResponse.json({
       trust_score: val.trust_score,
-      validation: {
-        reasoning: val.reasoning,
-        results: {
-          device_status: { reachable: val.device_active, status: val.device_active ? "CONNECTED_DATA" : "NOT_CONNECTED" },
-          sim_swap: { swapped: val.sim_swapped },
-          ...(body.latitude ? { location_verification: { verified: val.location_verified, confidence: val.location_verified ? "high" : "low" } } : {}),
-        },
-      },
-      classification: {
-        incident_type: type, severity, sector, confidence: 0.85,
-        summary: body.description?.substring(0, 200) || "",
-        reasoning: `Classified as ${type.replace(/_/g, " ")} with ${severity} severity.`,
-      },
+      validation: { reasoning: val.reasoning, results: {
+        device_status: { reachable: val.device_active, status: val.device_active ? "CONNECTED_DATA" : "NOT_CONNECTED" },
+        sim_swap: { swapped: val.sim_swapped },
+        ...(body.latitude ? { location_verification: { verified: val.location_verified, confidence: val.location_verified ? "high" : "low" } } : {}),
+      }},
+      classification: { incident_type: type, severity, sector, confidence: 0.85, summary: body.description?.substring(0, 200) || "",
+        reasoning: `Classified as ${type.replace(/_/g, " ")} with ${severity} severity.` },
       anomaly: { anomaly_detected: false, nearby_reports: 0 },
       processing_time_seconds: parseFloat((0.8 + Math.random() * 0.5).toFixed(2)),
-      incident_id: incident.id,
+      incident_id: iid,
     });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
