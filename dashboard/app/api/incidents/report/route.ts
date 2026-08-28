@@ -66,7 +66,7 @@ async function validateWithCamara(phone: string, lat?: number, lng?: number) {
     }
   }
 
-  const simResult = await callNokia("sim-swap/sim-swap/v0/check", {
+  const simResult = await callNokia("passthrough/camara/v1/sim-swap/sim-swap/v0/check", {
     phoneNumber: phone,
     maxAge: 240,
   });
