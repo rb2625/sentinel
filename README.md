@@ -5,8 +5,19 @@
 [![GSMA MENA Ignite Hackathon 2026](https://img.shields.io/badge/GSMA_MENA_Ignite-2026-blue)](https://hackerearth.com/hackathon/mena-ignite/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 [![Theme 2](https://img.shields.io/badge/Theme-2%20Smart%20Cities-orange)](https://hackerearth.com/hackathon/mena-ignite/)
+[![Shortlisted](https://img.shields.io/badge/Status-Shortlisted-brightgreen)](https://hackerearth.com/hackathon/mena-ignite/)
 
 SENTINEL validates citizen-reported emergencies using telecom network intelligence. When someone reports an incident through a web form, mobile app, or Telegram bot, an AI agent autonomously verifies the report using GSMA Open Gateway CAMARA APIs, classifies it, and dispatches a validated alert with a trust score.
+
+## Hackathon Status
+
+| Phase | Status | Date |
+|-------|--------|------|
+| Idea Phase | Shortlisted | Submitted Aug 20, 2026 |
+| Mentorship | Active | Aug 28 - Sep 10, 2026 |
+| Prototype Phase | Active | Aug 28 - Sep 13, 2026 |
+
+**Mentor:** Ahmed M. Suliman (STC)
 
 ## How It Works
 
@@ -41,6 +52,17 @@ Citizen Report --> Validator Agent --> Classifier Agent --> Anomaly Detector -->
 - **Network APIs:** Nokia Network-as-Code CAMARA APIs
 - **Alerts:** Telegram Bot API
 
+## Dashboard
+
+| Page | What it shows |
+|------|---------------|
+| **Overview** | KPI cards, severity breakdown, recent feed |
+| **Validate** | Submit incident form with presets, CAMARA validation results, agent reasoning trace |
+| **Incidents** | All reported incidents |
+| **Alerts** | Active alerts with severity badges |
+| **Map** | Geographic incident visualization |
+| **Analytics** | Incident type breakdown, sector distribution, severity chart |
+
 ## Quick Start
 
 ### 1. Run Schema in Supabase
@@ -63,6 +85,7 @@ uvicorn sentinel.main:app --reload
 ```bash
 cd dashboard
 npm install
+cp ../.env .env  # Copy env file
 npm run dev
 ```
 
@@ -92,9 +115,23 @@ sentinel/
     components/         # Reusable UI components
     lib/                # Supabase client
   scripts/
-    schema.sql          # Database schema
+    schema.sql          # Database schema (safe to run multiple times)
   docs/                 # Submission documents
+    SENTINEL Idea Capture Template.pdf
+    SENTINEL Pitch Deck.pptx
+    DEMO_DESCRIPTION.md
+    MENTOR_EMAIL.md
 ```
+
+## Submission Documents
+
+| Document | Status |
+|----------|--------|
+| Idea Capture Template | Submitted (Phase 1) |
+| Pitch Deck | Submitted (Phase 1) |
+| Demo Description | Ready |
+| Mentor Email | Drafted |
+| 3-minute Demo Video | Pending (after prototype works end-to-end) |
 
 ## License
 
