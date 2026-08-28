@@ -76,10 +76,15 @@ export async function GET(request: NextRequest) {
     }
 
     if (view === "map") {
-      const { data } = await supabase.from("incidents")
+      const { data: incidents } = await supabase.from("incidents")
         .select("id, incident_type, latitude, longitude, location_name, created_at")
         .order("created_at", { ascending: false }).limit(100);
-      return NextResponse.json({ markers: data || [] });
+      const { data: classData } = await supabase.from("classifications")
+        .select("incident_id, severity");
+      const sevMap: Record<number, string> = {};
+      (classData || []).forEach((c: any) => { sevMap[c.incident_id] = c.severity; });
+      const markers = (incidents || []).map((m: any) => ({ ...m, severity: sevMap[m.id] || "medium" }));
+      return NextResponse.json({ markers });
     }
 
     return NextResponse.json({ error: "Unknown view" }, { status: 400 });

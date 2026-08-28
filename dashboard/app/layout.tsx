@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { FloatingNav } from "../components/FloatingNav";
+import { LangProvider } from "../lib/lang-context";
 
 export const metadata: Metadata = {
   title: "SENTINEL - Urban Incident Detection",
@@ -11,6 +12,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className="dark">
       <body className="font-display bg-surface text-sand-100 antialiased">
+        <LangProvider>
         <div className="bg-gradient-animated" />
         <div className="bg-grid" />
         <div className="relative z-10 min-h-screen flex flex-col">
@@ -36,6 +38,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 pb-24 pt-6">{children}</main>
         </div>
         <FloatingNav />
+        </LangProvider>
       </body>
     </html>
   );
