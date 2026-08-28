@@ -2,9 +2,14 @@ from fastapi import APIRouter
 from typing import Optional
 import httpx
 from sentinel.config import get_settings
+from supabase import create_client
 
 router = APIRouter()
 settings = get_settings()
+
+
+def _get_supabase():
+    return create_client(settings.supabase_url, settings.supabase_service_role_key)
 
 
 async def send_telegram_alert(message: str) -> bool:
@@ -45,5 +50,10 @@ async def send_alert(severity: str, summary: str, incident_type: str,
 
 @router.get("/list")
 async def list_alerts(limit: int = 20):
-    """List recent alerts."""
-    return {"alerts": [], "total": 0}
+    """List recent alerts from Supabase."""
+    db = _get_supabase()
+    try:
+        resp = db.table("alerts").select("*").order("created_at", desc=True).limit(limit).execute()
+        return {"alerts": resp.data or [], "total": len(resp.data or [])}
+    except Exception as e:
+        return {"alerts": [], "total": 0, "error": str(e)}
