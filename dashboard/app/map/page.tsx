@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState, useRef } from "react";
+import { useLang } from "../../lib/lang-context";
 
 const SEVERITY_COLORS: Record<string, string> = {
   critical: "#ef4444",
@@ -19,6 +20,7 @@ interface Marker {
 }
 
 export default function MapPage() {
+  const { t } = useLang();
   const [markers, setMarkers] = useState<Marker[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Marker | null>(null);

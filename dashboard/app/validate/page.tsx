@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { useLang } from "../../lib/lang-context";
 import { Section } from "../../components/Section";
 import { SeverityBadge } from "../../components/SeverityBadge";
 
@@ -11,6 +12,7 @@ const PRESETS = [
 ];
 
 export default function ValidatePage() {
+  const { t } = useLang();
   const [form, setForm] = useState({ phone: "+99999991000", description: "", latitude: "25.1972", longitude: "55.2744", location_name: "", language: "en" });
   const [result, setResult] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -61,11 +63,11 @@ export default function ValidatePage() {
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="text-xs text-zinc-500 font-mono uppercase tracking-wider">Phone</label>
+              <label className="text-xs text-zinc-500 font-mono uppercase tracking-wider">{t("validate.phone")}</label>
               <input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} className="w-full mt-1 px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-sm text-sand-100 focus:border-amber-500/50 outline-none" />
             </div>
             <div>
-              <label className="text-xs text-zinc-500 font-mono uppercase tracking-wider">Language</label>
+              <label className="text-xs text-zinc-500 font-mono uppercase tracking-wider">{t("validate.language")}</label>
               <select value={form.language} onChange={e => setForm({ ...form, language: e.target.value })} className="w-full mt-1 px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-sm text-sand-100 focus:border-amber-500/50 outline-none">
                 <option value="en">English</option>
                 <option value="ar">Arabic</option>
@@ -74,20 +76,20 @@ export default function ValidatePage() {
             </div>
           </div>
           <div>
-            <label className="text-xs text-zinc-500 font-mono uppercase tracking-wider">Description</label>
-            <textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} rows={3} className="w-full mt-1 px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-sm text-sand-100 focus:border-amber-500/50 outline-none resize-none" placeholder="Describe the incident..." />
+            <label className="text-xs text-zinc-500 font-mono uppercase tracking-wider">{t("validate.description")}</label>
+            <textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} rows={3} className="w-full mt-1 px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-sm text-sand-100 focus:border-amber-500/50 outline-none resize-none" placeholder={t("validate.description_placeholder")} />
           </div>
           <div className="grid grid-cols-3 gap-4">
             <div>
-              <label className="text-xs text-zinc-500 font-mono uppercase tracking-wider">Latitude</label>
+              <label className="text-xs text-zinc-500 font-mono uppercase tracking-wider">{t("validate.lat")}</label>
               <input value={form.latitude} onChange={e => setForm({ ...form, latitude: e.target.value })} className="w-full mt-1 px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-sm text-sand-100 focus:border-amber-500/50 outline-none" />
             </div>
             <div>
-              <label className="text-xs text-zinc-500 font-mono uppercase tracking-wider">Longitude</label>
+              <label className="text-xs text-zinc-500 font-mono uppercase tracking-wider">{t("validate.lon")}</label>
               <input value={form.longitude} onChange={e => setForm({ ...form, longitude: e.target.value })} className="w-full mt-1 px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-sm text-sand-100 focus:border-amber-500/50 outline-none" />
             </div>
             <div>
-              <label className="text-xs text-zinc-500 font-mono uppercase tracking-wider">Location Name</label>
+              <label className="text-xs text-zinc-500 font-mono uppercase tracking-wider">{t("validate.location")}</label>
               <input value={form.location_name} onChange={e => setForm({ ...form, location_name: e.target.value })} className="w-full mt-1 px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-sm text-sand-100 focus:border-amber-500/50 outline-none" placeholder="e.g. Dubai Mall" />
             </div>
           </div>
@@ -103,7 +105,7 @@ export default function ValidatePage() {
           <div className="space-y-4">
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div className="glass rounded-xl p-4 text-center">
-                <p className="text-xs text-zinc-500 font-mono uppercase">Trust Score</p>
+                <p className="text-xs text-zinc-500 font-mono uppercase">{t("validate.trust_score")}</p>
                 <p className={`text-3xl font-bold mt-1 ${result.trust_score >= 60 ? "text-emerald-400" : result.trust_score >= 30 ? "text-amber-400" : "text-rose-400"}`}>{result.trust_score}</p>
               </div>
               <div className="glass rounded-xl p-4 text-center">
