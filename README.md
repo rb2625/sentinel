@@ -1,109 +1,101 @@
-# SENTINEL - Real-Time Urban Incident Detection with Network Intelligence
+# SENTINEL
 
-**GSMA MENA Ignite Hackathon 2026 | Theme 2: Smart Cities, Urban Safety & Mega-Project Infrastructure**
+**Real-Time Urban Incident Detection with Network Intelligence**
 
----
+[![GSMA MENA Ignite Hackathon 2026](https://img.shields.io/badge/GSMA_MENA_Ignite-2026-blue)](https://hackerearth.com/hackathon/mena-ignite/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green)](LICENSE)
+[![Theme 2](https://img.shields.io/badge/Theme-2%20Smart%20Cities-orange)](https://hackerearth.com/hackathon/mena-ignite/)
 
-SENTINEL is a smart city incident detection platform that validates real-time incident reports using telecom network intelligence (GSMA Open Gateway CAMARA APIs) and an AI agent layer. When someone reports a car accident, flooding, fire, or infrastructure damage in a MENA city, SENTINEL verifies the report is genuine before anyone responds.
+SENTINEL validates citizen-reported emergencies using telecom network intelligence. When someone reports an incident through a web form, mobile app, or Telegram bot, an AI agent autonomously verifies the report using GSMA Open Gateway CAMARA APIs, classifies it, and dispatches a validated alert with a trust score.
 
-## The Problem
-
-Urban cities in the MENA region face a critical gap in incident response. When citizens report emergencies through apps, hotlines, or social media, authorities have no way to verify:
-- Is the reporter physically at the incident location?
-- Is the phone number real and not spoofed?
-- Is this a duplicate of a report from 10 minutes ago?
-- Is this genuinely urgent or just someone venting?
-
-## The Solution
-
-SENTINEL uses a network intelligence-powered AI agent to validate every incident report in under 2 seconds:
-
-1. **Report arrives** (via app, web, Telegram, or API)
-2. **AI Agent orchestrates CAMARA APIs:**
-   - Location Verification confirms the reporter is within range
-   - Number Verification confirms the phone number is legitimate
-   - Device Status confirms the device is active and connected
-   - Geofencing monitors high-risk zones for emerging patterns
-3. **AI classifies** the incident (severity, sector, urgency) using multilingual NLP
-4. **Anomaly detection** identifies emerging clusters
-5. **Alerts dispatched** to relevant authorities via dashboard, Telegram, or webhook
-
-## Architecture
+## How It Works
 
 ```
-                   +-----------------+
-                   |   User Reports  |
-                   | (App/Web/TG)   |
-                   +--------+--------+
-                            |
-                   +--------v--------+
-                   |   FastAPI        |
-                   |   Backend        |
-                   +--------+--------+
-                            |
-              +-------------+-------------+
-              |                           |
-     +--------v--------+      +---------v---------+
-     |  AI Agent Layer  |      |  CAMARA API Client |
-     |  (Groq LLM)     |      |  (Nokia NaC)       |
-     |  Classify        |      |  Location Verify   |
-     |  Severity        |      |  Number Verify     |
-     |  Anomaly Detect  |      |  Device Status     |
-     +--------+--------+      |  Geofencing        |
-              |                +---------+---------+
-              |                          |
-     +--------v--------------------------v--------+
-     |           Supabase (PostgreSQL)            |
-     +----------------------+---------------------+
-                            |
-              +-------------+-------------+
-              |                           |
-     +--------v--------+      +---------v---------+
-     |   Dashboard      |      |   Telegram Bot     |
-     |   (Next.js)      |      |   Real-time alerts |
-     +------------------+      +-------------------+
+Citizen Report --> Validator Agent --> Classifier Agent --> Anomaly Detector --> Validated Alert
+                     |                    |                     |
+               CAMARA APIs          Groq LLM              Cluster Analysis
+          (Location, Device,       (Type, Severity,       (Geographic
+           SIM Swap)                Sector)                Patterns)
 ```
+
+1. **Validator Agent** autonomously calls CAMARA APIs (Location Verification, Number Verification, Device Status) based on report context
+2. **Classifier Agent** categorizes the incident by type, severity, and sector using a multilingual LLM (Arabic, English, Arabizi)
+3. **Anomaly Detector** finds geographic clusters and escalation patterns across multiple reports
+4. Validated alerts with trust scores are dispatched to the dashboard and Telegram
 
 ## CAMARA APIs Used
 
 | API | Purpose |
 |-----|---------|
-| Location Verification | Confirm reporter is at incident location |
-| Number Verification | Validate phone number is real |
-| Device Status | Check device is active |
-| Geofencing | Monitor high-risk zones |
+| Location Verification | Confirms reporter is physically near the incident |
+| Number Verification | Validates phone number is real and not spoofed |
+| Device Status | Checks if device is active and connected |
+| Geofencing | Monitors high-risk zones for clustered activity |
 
 ## Tech Stack
 
-- **Frontend:** Next.js + TypeScript + Tailwind CSS
 - **Backend:** FastAPI (Python)
-- **AI Layer:** Groq LLM (free tier) + custom classification
+- **AI Agent Layer:** CrewAI-compatible architecture with Groq Llama 3.3 70B
 - **Database:** Supabase (PostgreSQL)
-- **Network APIs:** Nokia Network-as-Code (CAMARA)
+- **Frontend:** Next.js on Vercel
+- **Network APIs:** Nokia Network-as-Code CAMARA APIs
 - **Alerts:** Telegram Bot API
-- **CI/CD:** GitHub Actions
 
-## Getting Started
+## Quick Start
+
+### 1. Run Schema in Supabase
+
+Go to Supabase Dashboard > SQL Editor, paste and run `scripts/schema.sql`.
+
+### 2. Backend
 
 ```bash
-# Clone
-git clone https://github.com/rb2625/sentinel.git
-cd sentinel
-
-# Backend
 cd backend
 python -m venv .venv
-source .venv/bin/activate
+.venv/Scripts/activate  # Windows
 pip install -r requirements.txt
-cp ../.env.example ../.env
+cp ../.env.example ../.env  # Fill in your keys
 uvicorn sentinel.main:app --reload
+```
 
-# Dashboard
-cd ../dashboard
+### 3. Dashboard
+
+```bash
+cd dashboard
 npm install
 npm run dev
 ```
 
+### 4. Environment Variables
+
+```
+NOKIA_NAC_API_KEY=your_nokia_nac_api_key
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+GROQ_API_KEY=your_groq_api_key
+TELEGRAM_BOT_TOKEN=your_bot_token
+TELEGRAM_CHAT_ID=your_chat_id
+```
+
+## Project Structure
+
+```
+sentinel/
+  backend/
+    sentinel/           # FastAPI app + CAMARA client
+    agents/             # CrewAI-compatible agent framework
+      pipeline.py       # Agent, Task, Crew, Tool abstractions
+      classifier.py     # LLM-based incident classifier
+    routers/            # API routes (incidents, validate, alerts)
+  dashboard/
+    app/                # Next.js pages (overview, validate, incidents, alerts, map, analytics)
+    components/         # Reusable UI components
+    lib/                # Supabase client
+  scripts/
+    schema.sql          # Database schema
+  docs/                 # Submission documents
+```
+
 ## License
 
-Apache 2.0 - see [LICENSE](LICENSE)
+MIT License - see [LICENSE](LICENSE)

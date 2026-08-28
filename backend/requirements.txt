@@ -8,3 +8,6 @@ pydantic-settings==2.5.0
 python-dotenv==1.0.1
 python-multipart==0.0.9
 network_as_code>=1.7.0
+# CrewAI-compatible agent framework
+# CrewAI requires Python 3.10-3.13; our agents module implements the same
+# Agent -> Task -> Crew architecture using Groq Llama 3.3 70B (free tier).
