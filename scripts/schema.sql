@@ -4,14 +4,13 @@
 -- Drop existing policies
 DROP POLICY IF EXISTS "svc_all" ON incidents;
 DROP POLICY IF EXISTS "svc_all" ON validations;
-DROP POLICY IF EXISTS "svc_all" ON classifications;
-DROP POLICY IF EXISTS "svc_all" ON alerts;
+DROP POLICY IF EXISTS "svc_all" ON sentinel_classifications;
+DROP POLICY IF EXISTS "svc_all" ON sentinel_alerts;
 DROP POLICY IF EXISTS "svc_all" ON geofence_zones;
-DROP POLICY IF EXISTS "svc_all" ON pipeline_runs;
 DROP POLICY IF EXISTS "anon_read" ON incidents;
 DROP POLICY IF EXISTS "anon_read" ON validations;
-DROP POLICY IF EXISTS "anon_read" ON classifications;
-DROP POLICY IF EXISTS "anon_read" ON alerts;
+DROP POLICY IF EXISTS "anon_read" ON sentinel_classifications;
+DROP POLICY IF EXISTS "anon_read" ON sentinel_alerts;
 DROP POLICY IF EXISTS "anon_read" ON geofence_zones;
 
 -- Tables
@@ -41,7 +40,7 @@ CREATE TABLE IF NOT EXISTS validations (
   created_at timestamptz DEFAULT now()
 );
 
-CREATE TABLE IF NOT EXISTS classifications (
+CREATE TABLE IF NOT EXISTS sentinel_classifications (
   id bigserial PRIMARY KEY,
   incident_id bigint REFERENCES incidents(id) ON DELETE CASCADE,
   incident_type text,
@@ -53,7 +52,7 @@ CREATE TABLE IF NOT EXISTS classifications (
   created_at timestamptz DEFAULT now()
 );
 
-CREATE TABLE IF NOT EXISTS alerts (
+CREATE TABLE IF NOT EXISTS sentinel_alerts (
   id bigserial PRIMARY KEY,
   incident_id bigint REFERENCES incidents(id) ON DELETE CASCADE,
   severity text NOT NULL DEFAULT 'medium',
@@ -75,17 +74,7 @@ CREATE TABLE IF NOT EXISTS geofence_zones (
   created_at timestamptz DEFAULT now()
 );
 
-CREATE TABLE IF NOT EXISTS pipeline_runs (
-  id bigserial PRIMARY KEY,
-  run_type text NOT NULL,
-  status text NOT NULL DEFAULT 'running',
-  source text,
-  items_total int DEFAULT 0,
-  items_new int DEFAULT 0,
-  error_message text,
-  started_at timestamptz DEFAULT now(),
-  finished_at timestamptz
-);
+
 
 -- Enable RLS
 ALTER TABLE incidents ENABLE ROW LEVEL SECURITY;
@@ -93,18 +82,16 @@ ALTER TABLE validations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE classifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE alerts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE geofence_zones ENABLE ROW LEVEL SECURITY;
-ALTER TABLE pipeline_runs ENABLE ROW LEVEL SECURITY;
 
 -- Recreate policies
 CREATE POLICY "svc_all" ON incidents FOR ALL USING (auth.role() = 'service_role');
 CREATE POLICY "svc_all" ON validations FOR ALL USING (auth.role() = 'service_role');
-CREATE POLICY "svc_all" ON classifications FOR ALL USING (auth.role() = 'service_role');
-CREATE POLICY "svc_all" ON alerts FOR ALL USING (auth.role() = 'service_role');
+CREATE POLICY "svc_all" ON sentinel_classifications FOR ALL USING (auth.role() = 'service_role');
+CREATE POLICY "svc_all" ON sentinel_alerts FOR ALL USING (auth.role() = 'service_role');
 CREATE POLICY "svc_all" ON geofence_zones FOR ALL USING (auth.role() = 'service_role');
-CREATE POLICY "svc_all" ON pipeline_runs FOR ALL USING (auth.role() = 'service_role');
 
 CREATE POLICY "anon_read" ON incidents FOR SELECT USING (true);
 CREATE POLICY "anon_read" ON validations FOR SELECT USING (true);
-CREATE POLICY "anon_read" ON classifications FOR SELECT USING (true);
-CREATE POLICY "anon_read" ON alerts FOR SELECT USING (true);
+CREATE POLICY "anon_read" ON sentinel_classifications FOR SELECT USING (true);
+CREATE POLICY "anon_read" ON sentinel_alerts FOR SELECT USING (true);
 CREATE POLICY "anon_read" ON geofence_zones FOR SELECT USING (true);

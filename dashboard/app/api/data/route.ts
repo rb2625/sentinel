@@ -22,9 +22,9 @@ export async function GET(request: NextRequest) {
       const [incCount, valCount, alertCount, recent, classData] = await Promise.all([
         supabase.from("incidents").select("*", { count: "exact", head: true }),
         supabase.from("validations").select("*", { count: "exact", head: true }).eq("overall_score", 1.0),
-        supabase.from("alerts").select("*", { count: "exact", head: true }).eq("acknowledged", false),
+        supabase.from("sentinel_alerts").select("*", { count: "exact", head: true }).eq("acknowledged", false),
         supabase.from("incidents").select("id, incident_type, description, location_name, created_at").order("created_at", { ascending: false }).limit(10),
-        supabase.from("classifications").select("severity, incident_type"),
+        supabase.from("sentinel_classifications").select("severity, incident_type"),
       ]);
 
       const byType: Record<string, number> = {};
@@ -53,14 +53,14 @@ export async function GET(request: NextRequest) {
     }
 
     if (view === "alerts") {
-      const { data } = await supabase.from("alerts").select("*").order("created_at", { ascending: false }).limit(50);
+      const { data } = await supabase.from("sentinel_alerts").select("*").order("created_at", { ascending: false }).limit(50);
       return NextResponse.json({ alerts: data || [] });
     }
 
     if (view === "analytics") {
       const [incCount, classData] = await Promise.all([
         supabase.from("incidents").select("*", { count: "exact", head: true }),
-        supabase.from("classifications").select("severity, sector, incident_type"),
+        supabase.from("sentinel_classifications").select("severity, sector, incident_type"),
       ]);
 
       const byType: Record<string, number> = {};
@@ -79,7 +79,7 @@ export async function GET(request: NextRequest) {
       const { data: incidents } = await supabase.from("incidents")
         .select("id, incident_type, latitude, longitude, location_name, created_at")
         .order("created_at", { ascending: false }).limit(100);
-      const { data: classData } = await supabase.from("classifications")
+      const { data: classData } = await supabase.from("sentinel_classifications")
         .select("incident_id, severity");
       const sevMap: Record<number, string> = {};
       (classData || []).forEach((c: any) => { sevMap[c.incident_id] = c.severity; });

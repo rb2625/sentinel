@@ -53,7 +53,7 @@ async def list_alerts(limit: int = 20):
     """List recent alerts from Supabase."""
     db = _get_supabase()
     try:
-        resp = db.table("alerts").select("*").order("created_at", desc=True).limit(limit).execute()
+        resp = db.table("sentinel_alerts").select("*").order("created_at", desc=True).limit(limit).execute()
         return {"alerts": resp.data or [], "total": len(resp.data or [])}
     except Exception as e:
         return {"alerts": [], "total": 0, "error": str(e)}

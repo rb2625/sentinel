@@ -42,7 +42,7 @@ async def get_stats():
     try:
         inc = db.table("incidents").select("id", count="exact").execute()
         val = db.table("validations").select("id", count="exact").execute()
-        ale = db.table("alerts").select("id", count="exact").execute()
+        ale = db.table("sentinel_alerts").select("id", count="exact").execute()
         return {
             "total_incidents": inc.count or 0,
             "total_validations": val.count or 0,

@@ -74,7 +74,7 @@ async def submit_report(report: IncidentCreate):
         }).execute()
 
         # Store classification
-        db.table("classifications").insert({
+        db.table("sentinel_classifications").insert({
             "incident_id": incident_id,
             "incident_type": classification.get("incident_type", "other"),
             "severity": classification.get("severity", "medium"),
@@ -87,7 +87,7 @@ async def submit_report(report: IncidentCreate):
         # Auto-alert if severity is high or critical
         severity = classification.get("severity", "medium")
         if severity in ("high", "critical"):
-            db.table("alerts").insert({
+            db.table("sentinel_alerts").insert({
                 "incident_id": incident_id,
                 "severity": severity,
                 "sector": classification.get("sector", "general"),
@@ -134,7 +134,7 @@ async def get_incident(incident_id: int):
         if not inc.data:
             raise HTTPException(status_code=404, detail="Incident not found")
         val = db.table("validations").select("*").eq("incident_id", incident_id).execute()
-        cls = db.table("classifications").select("*").eq("incident_id", incident_id).execute()
+        cls = db.table("sentinel_classifications").select("*").eq("incident_id", incident_id).execute()
         return {
             "incident": inc.data[0],
             "validation": val.data[0] if val.data else None,
