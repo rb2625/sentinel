@@ -17,7 +17,6 @@ SENTINEL validates citizen-reported emergencies using telecom network intelligen
 | Mentorship | Active | Aug 28 - Sep 10, 2026 |
 | Prototype Phase | Active | Aug 28 - Sep 13, 2026 |
 
-**Mentor:** Ahmed M. Suliman (STC)
 
 ## How It Works
 
