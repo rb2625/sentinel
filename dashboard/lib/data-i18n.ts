@@ -1,0 +1,57 @@
+import { Locale } from "./i18n";
+
+export const dataTranslations: Record<string, Record<Locale, string>> = {
+  "car_accident": { en: "Car Accident", ar: "\u062d\u0627\u062f\u062b \u0633\u064a\u0627\u0631\u0629" },
+  "car accident": { en: "Car Accident", ar: "\u062d\u0627\u062f\u062b \u0633\u064a\u0627\u0631\u0629" },
+  "traffic_accident": { en: "Traffic Accident", ar: "\u062d\u0627\u062f\u062b \u0645\u0631\u0648\u0631\u064a" },
+  "traffic accident": { en: "Traffic Accident", ar: "\u062d\u0627\u062f\u062b \u0645\u0631\u0648\u0631\u064a" },
+  "fire": { en: "Fire", ar: "\u062d\u0631\u064a\u0642" },
+  "medical_emergency": { en: "Medical Emergency", ar: "\u0637\u0627\u0631\u0626 \u0637\u0628\u064a" },
+  "medical emergency": { en: "Medical Emergency", ar: "\u0637\u0627\u0631\u0626 \u0637\u0628\u064a" },
+  "flood": { en: "Flood", ar: "\u0641\u064a\u0636\u0627\u0646" },
+  "earthquake": { en: "Earthquake", ar: "\u0632\u0644\u0632\u0627\u0644" },
+  "gas_leak": { en: "Gas Leak", ar: "\u062a\u0633\u0631\u0628 \u063a\u0627\u0632" },
+  "gas leak": { en: "Gas Leak", ar: "\u062a\u0633\u0631\u0628 \u063a\u0627\u0632" },
+  "building_collapse": { en: "Building Collapse", ar: "\u0627\u0646\u0647\u064a\u0627\u0631" },
+  "building collapse": { en: "Building Collapse", ar: "\u0627\u0646\u0647\u064a\u0627\u0631" },
+  "robbery": { en: "Robbery", ar: "\u0633\u0631\u0642\u0629" },
+  "assault": { en: "Assault", ar: "\u0627\u0639\u062a\u062f\u0627\u0621" },
+  "vandalism": { en: "Vandalism", ar: "\u062a\u062e\u0631\u064a\u0628" },
+  "power_outage": { en: "Power Outage", ar: "\u0627\u0646\u0642\u0637\u0627\u0639" },
+  "power outage": { en: "Power Outage", ar: "\u0627\u0646\u0642\u0637\u0627\u0639" },
+  "water_leak": { en: "Water Leak", ar: "\u062a\u0633\u0631\u0628 \u0645\u064a\u0627\u0647" },
+  "water leak": { en: "Water Leak", ar: "\u062a\u0633\u0631\u0628 \u0645\u064a\u0627\u0647" },
+  "other": { en: "Other", ar: "\u0623\u062e\u0631\u0649" },
+  "general": { en: "General", ar: "\u0639\u0627\u0645" },
+  "transport": { en: "Transport", ar: "\u0627\u0644\u0646\u0642\u0644" },
+  "industrial": { en: "Industrial", ar: "\u0627\u0644\u0635\u0646\u0627\u0639\u064a" },
+  "healthcare": { en: "Healthcare", ar: "\u0627\u0644\u0631\u0639\u0627\u064a\u0629" },
+  "residential": { en: "Residential", ar: "\u0627\u0644\u0633\u0643\u0646\u064a" },
+  "commercial": { en: "Commercial", ar: "\u0627\u0644\u062a\u062c\u0627\u0631\u064a" },
+  "infrastructure": { en: "Infrastructure", ar: "\u0627\u0644\u0628\u0646\u064a\u0629" },
+  "energy": { en: "Energy", ar: "\u0627\u0644\u0637\u0627\u0642\u0629" },
+  "water": { en: "Water", ar: "\u0627\u0644\u0645\u064a\u0627\u0647" },
+  "environment": { en: "Environment", ar: "\u0627\u0644\u0628\u064a\u0626\u0629" },
+  "public_safety": { en: "Public Safety", ar: "\u0627\u0644\u0623\u0645\u0627\u0646" },
+  "public safety": { en: "Public Safety", ar: "\u0627\u0644\u0623\u0645\u0627\u0646" },
+  "education": { en: "Education", ar: "\u0627\u0644\u062a\u0639\u0644\u064a\u0645" },
+  "hospitality": { en: "Hospitality", ar: "\u0627\u0644\u0636\u064a\u0627\u0641\u0629" },
+  "government": { en: "Government", ar: "\u0627\u0644\u062d\u0643\u0648\u0645\u0629" },
+  "connected_data": { en: "CONNECTED_DATA", ar: "\u0645\u062a\u0635\u0644" },
+  "connected_sms": { en: "CONNECTED_SMS", ar: "\u0645\u062a\u0635\u0644 \u0628\u0627\u0644\u0631\u0633\u0627\u0626\u0644" },
+  "not_connected": { en: "NOT_CONNECTED", ar: "\u063a\u064a\u0631 \u0645\u062a\u0635\u0644" },
+  "unavailable": { en: "UNAVAILABLE", ar: "\u063a\u064a\u0631 \u0645\u062a\u0641\u0648\u0631" },
+  "true": { en: "True", ar: "\u0635\u062d\u064a\u062d" },
+  "false": { en: "False", ar: "\u062e\u0637\u0623" },
+  "yes": { en: "Yes", ar: "\u0646\u0639\u0645" },
+  "no": { en: "No", ar: "\u0644\u0627" },
+  "verified": { en: "Verified", ar: "\u0645\u062a\u062d\u0642\u0642" },
+  "not verified": { en: "Not Verified", ar: "\u063a\u064a\u0631 \u0645\u062a\u062d\u0642\u0642" },
+  "unknown": { en: "Unknown", ar: "\u063a\u064a\u0631 \u0645\u0639\u0631\u0648\u0641" },
+};
+
+export function tData(value: string, locale: Locale = "en"): string {
+  if (!value) return value;
+  const lower = value.toLowerCase().trim();
+  return dataTranslations[lower]?.[locale] || dataTranslations[value]?.[locale] || value;
+}

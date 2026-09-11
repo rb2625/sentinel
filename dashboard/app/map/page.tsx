@@ -20,7 +20,7 @@ interface Marker {
 }
 
 export default function MapPage() {
-  const { t } = useLang();
+  const { t, tData } = useLang();
   const [markers, setMarkers] = useState<Marker[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Marker | null>(null);
@@ -72,7 +72,7 @@ export default function MapPage() {
         const marker = L.marker([m.latitude, m.longitude], { icon }).addTo(map);
         marker.bindPopup(`
           <div style="font-family:system-ui;min-width:180px">
-            <div style="font-weight:600;text-transform:capitalize;margin-bottom:4px">${(m.incident_type || "unknown").replace(/_/g, " ")}</div>
+            <div style="font-weight:600;text-transform:capitalize;margin-bottom:4px">${tData((m.incident_type || "unknown").replace(/_/g, " "))}</div>
             <div style="font-size:12px;color:#666;margin-bottom:4px">${m.location_name || "Unknown location"}</div>
             <div style="font-size:11px;color:${color};font-weight:600;text-transform:uppercase">${m.severity}</div>
             <div style="font-size:10px;color:#999;margin-top:4px">${new Date(m.created_at).toLocaleString()}</div>

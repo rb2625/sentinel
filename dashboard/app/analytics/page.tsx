@@ -5,7 +5,7 @@ import { useLang } from "../../lib/lang-context";
 export default function AnalyticsPage() {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const { t } = useLang();
+  const { t, tData } = useLang();
 
   useEffect(() => {
     fetch("/api/data?view=analytics")
@@ -41,7 +41,7 @@ export default function AnalyticsPage() {
         <div className="space-y-3">
           {Object.entries(byType).sort(([, a]: [string, any], [, b]: [string, any]) => b - a).map(([type, count]: [string, any]) => (
             <div key={type} className="flex items-center gap-3">
-              <span className="text-xs text-zinc-400 w-28 capitalize truncate">{type.replace(/_/g, " ")}</span>
+              <span className="text-xs text-zinc-400 w-28 truncate">{tData(type.replace(/_/g, " "))}</span>
               <div className="flex-1 h-6 bg-white/5 rounded-full overflow-hidden">
                 <div
                   className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-violet-500 transition-all duration-700"
@@ -63,7 +63,7 @@ export default function AnalyticsPage() {
           <div className="space-y-2">
             {Object.entries(bySector).sort(([, a]: [string, any], [, b]: [string, any]) => b - a).map(([sector, count]: [string, any]) => (
               <div key={sector} className="flex items-center justify-between py-2 border-b border-white/5 last:border-0">
-                <span className="text-sm text-zinc-300 capitalize">{sector}</span>
+                <span className="text-sm text-zinc-300">{tData(sector)}</span>
                 <span className="text-sm font-mono text-zinc-500">{count}</span>
               </div>
             ))}
@@ -85,7 +85,7 @@ export default function AnalyticsPage() {
               };
               return (
                 <div key={sev} className={`rounded-xl p-4 text-center ${colors[sev] || "text-zinc-400 bg-white/5"}`}>
-                  <p className="text-xs font-mono uppercase opacity-70">{t(`severity.${sev}`) || sev}</p>
+                  <p className="text-xs font-mono uppercase opacity-70">{t(`severity.${sev}`) || tData(sev)}</p>
                   <p className="text-2xl font-bold mt-1">{count}</p>
                 </div>
               );

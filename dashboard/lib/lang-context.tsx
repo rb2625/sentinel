@@ -1,21 +1,27 @@
 "use client";
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { Locale, t } from "./i18n";
+import { tData } from "./data-i18n";
 
 interface LangContextType {
   locale: Locale;
   setLocale: (l: Locale) => void;
   t: (key: string) => string;
+  tData: (value: string) => string;
 }
 
-const LangContext = createContext<LangContextType>({ locale: "en", setLocale: () => {}, t: (k: string) => k });
+const LangContext = createContext<LangContextType>({ locale: "en", setLocale: () => {}, t: (k: string) => k, tData: (v: string) => v });
 
 export function LangProvider({ children }: { children: ReactNode }) {
   const [locale, setLocaleState] = useState<Locale>("en");
 
   useEffect(() => {
     const saved = localStorage.getItem("sentinel-lang") as Locale;
-    if (saved === "ar" || saved === "en") setLocaleState(saved);
+    if (saved === "ar" || saved === "en") {
+      setLocaleState(saved);
+      document.documentElement.dir = saved === "ar" ? "rtl" : "ltr";
+      document.documentElement.lang = saved;
+    }
   }, []);
 
   const setLocale = (l: Locale) => {
@@ -26,7 +32,7 @@ export function LangProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <LangContext.Provider value={{ locale, setLocale, t: (key: string) => t(key, locale) }}>
+    <LangContext.Provider value={{ locale, setLocale, t: (key: string) => t(key, locale), tData: (v: string) => tData(v, locale) }}>
       {children}
     </LangContext.Provider>
   );
