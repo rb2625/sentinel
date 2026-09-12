@@ -128,7 +128,7 @@ export async function POST(request: NextRequest) {
         validation_details: { device_status: deviceResult, source: "telegram" },
       });
 
-      await supabase.from("sentinel_classifications").insert({
+      await supabase.from("classifications").insert({
         incident_id: incident.id,
         incident_type: type,
         severity,
@@ -139,7 +139,7 @@ export async function POST(request: NextRequest) {
       });
 
       if (severity === "critical" || severity === "high") {
-        await supabase.from("sentinel_alerts").insert({
+        await supabase.from("alerts").insert({
           incident_id: incident.id,
           severity,
           sector,
